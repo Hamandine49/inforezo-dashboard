@@ -233,8 +233,9 @@ const CHL={atelier:'Atelier',magasin:'Magasin',pro:'Pro',internet:'Internet'};
 const CHC={atelier:'#1D9E75',magasin:'#378ADD',pro:'#D85A30',internet:'#7F77DD'};
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
 const OBJ=8500;
-const OBJ_CH={atelier:1800,magasin:600,pro:5600,internet:500};
-const VTYPES={atelier:['Prestation','Matériel posé'],magasin:['Vente matériel','Accessoire'],pro:['Prestation','Vente matériel','Contrat'],internet:['Vente en ligne']};
+const OBJ_SEMAINES=4;
+const OBJ_CH={atelier:3800,magasin:600,pro:3600,internet:500};
+const VTYPES={atelier:['Prestation','Matériel posé'],magasin:['Vente matériel','Accessoire','Prestation','Logiciel'],pro:['Prestation','Vente matériel','Contrat','Logiciel'],internet:['Vente en ligne','Logiciel']};
 
 let supabase_client=null;
 let currentMonth='';
@@ -395,7 +396,7 @@ function renderDashboard(){
   document.getElementById('kpi-grid').innerHTML=[
     {l:'Reste à faire',v:'€'+fmt(Math.max(0,OBJ-mg)),s:pct>=100?'✓ Objectif atteint !':'sur '+fmt(OBJ)+' €',c:pct>=100?'ok':pct>=60?'warn':'danger'},
     {l:'Devis potentiel',v:'€'+fmt(dPot),s:dOpen.length+' devis ouverts',c:''},
-    {l:'CA moyen / semaine',v:'€'+fmt(ca/5),s:'Obj. hebdo marge : €'+fmt(OBJ/5),c:''},
+    {l:'CA moyen / semaine',v:'€'+fmt(ca/5),s:'Obj. hebdo marge : €'+fmt(OBJ/OBJ_SEMAINES)+' (S5 = bonus)',c:''},
     {l:'Conversion devis',v:devis.length>0?Math.round(devis.filter(d=>d.status==='gagne').length/devis.length*100)+'%':'—',s:devis.filter(d=>d.status==='gagne').length+' gagnés / '+devis.length,c:''},
   ].map(k=>`<div class="kpi ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.v}</div><div class="kpi-sub">${k.s}</div></div>`).join('');
 
@@ -432,7 +433,7 @@ function renderDashboard(){
 
   let wHtml='';
   for(let w=0;w<5;w++){
-    const wca=weekCA(w),wm=weekMarge(w),wp=Math.min(100,Math.round(wm/(OBJ/5)*100));
+    const wca=weekCA(w),wm=weekMarge(w),wp=Math.min(100,Math.round(wm/(OBJ/OBJ_SEMAINES)*100));
     wHtml+=`<div class="recap-row">
       <div class="recap-label" onclick="showTab('s${w}')">Semaine ${w+1}</div>
       <div style="flex:1"><div class="pbar"><div style="height:100%;border-radius:5px;width:${wp}%;background:${wp>=100?'#1D9E75':wp>=60?'#EF9F27':'#E24B4A'}"></div></div></div>
@@ -477,7 +478,7 @@ function renderWeek(w){
     <div class="ws-total">
       <span>CA semaine : <span style="color:#085041">€${fmt(weekCA(w))}</span></span>
       <span>Marge semaine : <span style="color:#085041">€${fmt(weekMarge(w))}</span></span>
-      <span style="color:#888;font-size:12px;font-weight:400">Obj. hebdo : €${fmt(OBJ/5)} de marge</span>
+      <span style="color:#888;font-size:12px;font-weight:400">${w<4?'Obj. hebdo : €'+fmt(OBJ/OBJ_SEMAINES)+' de marge':'🎯 Semaine bonus !'}</span>
     </div>
   </div></div>`;
   el.innerHTML=html;

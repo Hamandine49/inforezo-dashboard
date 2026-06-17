@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau de bord — Inforezo</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:14px}
+.header{background:#085041;color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.header h1{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.header-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.month-sel{font-size:13px;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-family:inherit;cursor:pointer}
+.month-sel option{color:#1a1a1a;background:#fff}
+.sync-status{font-size:11px;opacity:.75;display:flex;align-items:center;gap:5px}
+.container{max-width:1100px;margin:0 auto;padding:20px 16px}
+
+.tabs{display:flex;gap:3px;margin-bottom:20px;flex-wrap:wrap;border-bottom:1px solid #ddd}
+.tab{padding:8px 14px;font-size:13px;cursor:pointer;border-radius:6px 6px 0 0;border:1px solid transparent;color:#666;background:transparent;margin-bottom:-1px;font-family:inherit}
+.tab.active{color:#085041;background:#fff;border-color:#ddd;border-bottom-color:#fff;font-weight:600}
+.tab:hover:not(.active){background:#f0f0ee;color:#333}
+.section{display:none}.section.active{display:block}
+
+.ca-banner{background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border:1px solid #e8e8e5;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ca-item{text-align:center;padding:4px 0}
+.ca-item .val{font-size:22px;font-weight:700}
+.ca-item .lbl{font-size:11px;color:#888;margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+.ca-item .sub{font-size:12px;margin-top:2px;font-weight:500}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.kpi{background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e8e8e5}
+.kpi-label{font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.kpi-value{font-size:20px;font-weight:700;color:#1a1a1a}
+.kpi-sub{font-size:11px;color:#888;margin-top:2px}
+.kpi.ok .kpi-value{color:#085041}.kpi.warn .kpi-value{color:#BA7517}.kpi.danger .kpi-value{color:#A32D2D}
+
+.pbar{height:10px;border-radius:5px;background:#eee;overflow:hidden;margin:4px 0}
+.pfill{height:100%;border-radius:5px;transition:width .4s}
+.g{background:#1D9E75}.a{background:#EF9F27}.r{background:#E24B4A}
+
+.card{background:#fff;border-radius:10px;padding:14px 16px;border:1px solid #e8e8e5;margin-bottom:14px}
+.card-title{font-size:12px;font-weight:600;color:#555;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+
+.wg-head{display:grid;grid-template-columns:82px 1fr 1fr 1fr 1fr;gap:5px;margin-bottom:3px}
+.wg-head span{font-size:11px;font-weight:600;text-align:center;padding:5px 4px;border-radius:5px 5px 0 0}
+.day-row{display:grid;grid-template-columns:82px 1fr 1fr 1fr 1fr;gap:5px;margin-bottom:4px;align-items:start}
+.day-label{font-size:12px;color:#666;padding-top:8px;font-weight:500}
+.cell{border-radius:0 0 7px 7px;padding:6px;min-height:36px;border:1px solid #e8e8e5;background:#fafafa}
+.s-entry{display:flex;gap:3px;align-items:center;margin-bottom:3px;flex-wrap:wrap}
+.s-entry input{font-size:11px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;background:#fff;color:#1a1a1a;font-family:inherit}
+.s-entry select{font-size:11px;padding:3px 4px;border:1px solid #ddd;border-radius:4px;background:#fff;color:#1a1a1a;font-family:inherit}
+.del-btn{font-size:11px;color:#bbb;cursor:pointer;background:none;border:none;padding:0 3px}
+.add-btn{font-size:11px;color:#888;cursor:pointer;background:none;border:1px dashed #ccc;padding:2px 6px;border-radius:4px;margin-top:2px;width:100%;text-align:left;font-family:inherit}
+.add-btn:hover{background:#f0f8f5;border-color:#1D9E75;color:#085041}
+.cell-tot{font-size:10px;font-weight:600;color:#085041;margin-top:4px;text-align:right;padding-top:3px;border-top:1px solid #e8e8e5}
+.week-summary{background:#f0f8f5;border-radius:8px;padding:10px 14px;margin-top:12px;border:1px solid #9FE1CB}
+.ws-row{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin-bottom:4px}
+.ws-total{display:flex;gap:24px;font-size:13px;font-weight:700;margin-top:4px;padding-top:6px;border-top:1px solid #9FE1CB}
+
+.devis-table{width:100%;border-collapse:collapse;font-size:12px}
+.devis-table th{font-size:11px;font-weight:600;color:#888;text-align:left;padding:7px 8px;border-bottom:1px solid #eee;background:#fafafa}
+.devis-table td{padding:5px 8px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+.devis-table tr:hover td{background:#fafafa}
+.devis-table td input,.devis-table td select{font-size:11px;background:#fff;border:1px solid #ddd;border-radius:4px;color:#1a1a1a;padding:3px 5px;font-family:inherit}
+.sp{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:600;cursor:pointer;border:none;font-family:inherit;white-space:nowrap}
+.s-attente{background:#FAEEDA;color:#7A4A00}.s-relancer{background:#FCEBEB;color:#8B1F1F}.s-gagne{background:#E1F5EE;color:#04342C}.s-perdu{background:#F1EFE8;color:#444}
+.add-row-btn{font-size:12px;padding:7px 14px;margin-top:10px;cursor:pointer;border:1px dashed #ccc;border-radius:7px;background:none;color:#666;width:100%;font-family:inherit}
+.add-row-btn:hover{border-color:#085041;color:#085041;background:#f0f8f5}
+.devis-totbar{margin-top:10px;padding:10px 14px;background:#f0f8f5;border-radius:8px;font-size:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;border:1px solid #9FE1CB}
+
+.charges-table{width:100%;border-collapse:collapse;font-size:13px}
+.charges-table th{font-weight:600;color:#888;font-size:11px;text-align:left;padding:8px 10px;border-bottom:1px solid #eee;background:#fafafa}
+.charges-table td{padding:8px 10px;border-bottom:1px solid #f0f0f0}
+.charges-table .tr-tot td{font-weight:700;background:#f5f5f3}
+.charges-table .tr-obj td{color:#085041;font-weight:700;background:#f0f8f5}
+.obj-canal{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.obj-item{display:flex;justify-content:space-between;padding:7px 12px;background:#fff;border-radius:7px;border-left:4px solid #ccc;font-size:12px;border-bottom:1px solid #eee}
+
+.fsel{font-size:12px;padding:5px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;color:#1a1a1a;margin-right:8px;margin-bottom:12px;font-family:inherit}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#666}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.recap-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.recap-label{width:72px;font-size:12px;color:#666;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.recap-label:hover{color:#085041}
+.recap-ca{font-size:11px;color:#888;width:94px;text-align:right}
+.recap-mg{font-size:11px;font-weight:700;width:94px;text-align:right;color:#085041}
+
+/* Historique */
+.hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px}
+.hist-card{background:#fff;border-radius:8px;padding:12px 14px;border:1px solid #e8e8e5;cursor:pointer}
+.hist-card:hover{border-color:#1D9E75;box-shadow:0 2px 8px rgba(29,158,117,.1)}
+.hist-card.current-month{border-color:#1D9E75;border-width:2px}
+.hist-month{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:6px;text-transform:capitalize}
+.hist-vals{font-size:11px;color:#888}
+.hist-vals strong{color:#085041}
+
+/* Modal mot de passe */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:12px;padding:28px 32px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.15)}
+.modal h2{font-size:16px;font-weight:600;margin-bottom:6px}
+.modal p{font-size:12px;color:#888;margin-bottom:16px}
+.modal input{width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:7px;font-size:14px;font-family:inherit;margin-bottom:10px}
+.modal input:focus{outline:none;border-color:#085041}
+.modal-btns{display:flex;gap:8px}
+.btn-primary{flex:1;padding:8px;background:#085041;color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600}
+.btn-primary:hover{background:#0F6E56}
+.btn-secondary{flex:1;padding:8px;background:none;color:#666;border:1px solid #ddd;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit}
+.modal-error{font-size:12px;color:#A32D2D;margin-bottom:8px;display:none}
+
+/* Notification */
+.notif{position:fixed;bottom:20px;right:20px;background:#085041;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none}
+.notif.show{opacity:1}
+
+@media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr}.two-col{grid-template-columns:1fr}.ca-banner{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- MODAL MOT DE PASSE -->
+<div class="modal-overlay" id="pwd-modal" style="display:none">
+  <div class="modal">
+    <h2>🔒 Onglet Charges</h2>
+    <p>Cet onglet est réservé à la direction. Entrez le mot de passe pour y accéder.</p>
+    <div class="modal-error" id="pwd-error">Mot de passe incorrect.</div>
+    <input type="password" id="pwd-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')checkPwd()">
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="closePwdModal()">Annuler</button>
+      <button class="btn-primary" onclick="checkPwd()">Accéder</button>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<div class="header">
+  <div>
+    <h1>📊 Tableau de bord commercial</h1>
+    <div style="font-size:12px;opacity:.7">Inforezo — ALH Conseil</div>
+  </div>
+  <div class="header-right">
+    <select class="month-sel" id="month-sel" onchange="changeMonth()"></select>
+    <button onclick="newMonth()" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.2);color:#fff;cursor:pointer;font-family:inherit">+ Nouveau mois</button>
+    <div class="sync-status" id="sync-status">⏳ Connexion…</div>
+  </div>
+</div>
+
+<div class="container">
+<div class="tabs">
+  <button class="tab active" onclick="showTab('dashboard')">📈 Vue mensuelle</button>
+  <button class="tab" onclick="showTab('s0')">Semaine 1</button>
+  <button class="tab" onclick="showTab('s1')">Semaine 2</button>
+  <button class="tab" onclick="showTab('s2')">Semaine 3</button>
+  <button class="tab" onclick="showTab('s3')">Semaine 4</button>
+  <button class="tab" onclick="showTab('s4')">Semaine 5</button>
+  <button class="tab" onclick="showTab('devis')">📋 Devis</button>
+  <button class="tab" onclick="showTab('historique')">📅 Historique</button>
+  <button class="tab" id="charges-tab" onclick="askChargesPwd()">🔒 Charges</button>
+</div>
+
+<div id="tab-dashboard" class="section active">
+  <div class="ca-banner" id="ca-banner"></div>
+  <div class="kpi-grid" id="kpi-grid"></div>
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:5px">
+      <span>Progression marge vers l'objectif mensuel (8 500 €)</span>
+      <span id="obj-pct" style="font-weight:700;color:#085041"></span>
+    </div>
+    <div class="pbar" style="height:12px"><div class="pfill g" id="main-progress" style="width:0%"></div></div>
+  </div>
+  <div class="two-col">
+    <div class="card"><div class="card-title">Marge par canal</div><div id="canal-bars"></div></div>
+    <div class="card"><div class="card-title">Devis en cours</div><div id="devis-summary"></div></div>
+  </div>
+  <div class="card"><div class="card-title">Récap semaine par semaine</div><div id="weekly-recap"></div></div>
+</div>
+
+<div id="tab-s0" class="section"></div>
+<div id="tab-s1" class="section"></div>
+<div id="tab-s2" class="section"></div>
+<div id="tab-s3" class="section"></div>
+<div id="tab-s4" class="section"></div>
+
+<div id="tab-devis" class="section">
+  <div class="card">
+    <div>
+      <select class="fsel" id="devis-filter" onchange="renderDevis()">
+        <option value="all">Tous les canaux</option>
+        <option value="magasin">Magasin</option>
+        <option value="pro">Pro</option>
+      </select>
+      <select class="fsel" id="status-filter" onchange="renderDevis()">
+        <option value="all">Tous statuts</option>
+        <option value="attente">En attente</option>
+        <option value="relancer">À relancer</option>
+        <option value="gagne">Gagné</option>
+        <option value="perdu">Perdu</option>
+      </select>
+    </div>
+    <div style="overflow-x:auto"><div id="devis-container"></div></div>
+    <button class="add-row-btn" onclick="addDevis()">+ Ajouter un devis</button>
+    <div class="devis-totbar" id="devis-total-bar"></div>
+  </div>
+</div>
+
+<div id="tab-historique" class="section">
+  <div class="card">
+    <div class="card-title">Historique mensuel</div>
+    <div class="hist-grid" id="hist-grid"></div>
+    <div id="hist-chart-area"></div>
+  </div>
+</div>
+
+<div id="tab-charges" class="section">
+  <div class="card"><div id="charges-content"></div></div>
+</div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION — À REMPLIR APRÈS CRÉATION SUPABASE
+// ============================================================
+const SUPABASE_URL = 'https://oknillsyhtlmdposyxdv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rbmlsbHN5aHRsbWRwb3N5eGR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODEzMDEsImV4cCI6MjA5NzI1NzMwMX0.izso90S-pH4KYYLeJEJRkEmtuWIW1TGaS0d6AryLRV8';
+// Mot de passe onglet Charges (changez-le !)
+const CHARGES_PWD = '123Soleil!';
+// ============================================================
+
+const CH=['atelier','magasin','pro','internet'];
+const CHL={atelier:'Atelier',magasin:'Magasin',pro:'Pro',internet:'Internet'};
+const CHC={atelier:'#1D9E75',magasin:'#378ADD',pro:'#D85A30',internet:'#7F77DD'};
+const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi'];
+const OBJ=8500;
+const OBJ_CH={atelier:1800,magasin:600,pro:5600,internet:500};
+const VTYPES={atelier:['Prestation','Matériel posé'],magasin:['Vente matériel','Accessoire'],pro:['Prestation','Vente matériel','Contrat'],internet:['Vente en ligne']};
+
+let supabase_client=null;
+let currentMonth='';
+let sales={};
+let devis=[];
+let nextId=1;
+let chargesUnlocked=false;
+let allMonthsCache=[];
+let saveTimer=null;
+
+// Init Supabase
+function initSupabase(){
+  try{
+    if(SUPABASE_URL==='VOTRE_URL_SUPABASE_ICI'){
+      setSync('⚠️ Mode local (Supabase non configuré)','#BA7517');
+      return false;
+    }
+    supabase_client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    setSync('✅ Connecté','#1D9E75');
+    return true;
+  }catch(e){
+    setSync('❌ Erreur connexion','#A32D2D');
+    return false;
+  }
+}
+
+function setSync(txt,col){
+  const el=document.getElementById('sync-status');
+  el.textContent=txt;el.style.color=col||'rgba(255,255,255,.75)';
+}
+
+// Mois courant
+function getCurrentMonthKey(){
+  const n=new Date();
+  return n.getFullYear()+'-'+(String(n.getMonth()+1).padStart(2,'0'));
+}
+function monthLabel(key){
+  const [y,m]=key.split('-');
+  return new Date(y,m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+}
+
+// Chargement données
+async function loadMonth(monthKey){
+  currentMonth=monthKey;
+  sales={};devis=[];nextId=1;
+  if(!supabase_client){loadFromLocal(monthKey);return;}
+  setSync('⏳ Chargement…');
+  try{
+    const {data,error}=await supabase_client.from('inforezo_data').select('*').eq('month',monthKey).single();
+    if(error&&error.code!=='PGRST116'){throw error;}
+    if(data&&data.payload){
+      const p=data.payload;
+      sales=p.sales||{};
+      devis=p.devis||[];
+      nextId=(devis.length>0?Math.max(...devis.map(d=>d.id))+1:1);
+    }
+    setSync('✅ Synchronisé');
+  }catch(e){
+    setSync('⚠️ Erreur chargement','#BA7517');
+    loadFromLocal(monthKey);
+  }
+  renderAll();
+  await loadAllMonths();
+}
+
+function loadFromLocal(monthKey){
+  try{
+    const raw=localStorage.getItem('inforezo_'+monthKey);
+    if(raw){const p=JSON.parse(raw);sales=p.sales||{};devis=p.devis||[];nextId=(devis.length>0?Math.max(...devis.map(d=>d.id))+1:1);}
+  }catch(e){}
+}
+function saveToLocal(monthKey){
+  try{localStorage.setItem('inforezo_'+monthKey,JSON.stringify({sales,devis}));}catch(e){}
+}
+
+async function saveData(){
+  saveToLocal(currentMonth);
+  if(!supabase_client)return;
+  setSync('💾 Sauvegarde…');
+  try{
+    await supabase_client.from('inforezo_data').upsert({month:currentMonth,payload:{sales,devis},updated_at:new Date().toISOString()},{onConflict:'month'});
+    setSync('✅ Sauvegardé');
+  }catch(e){setSync('⚠️ Erreur sauvegarde','#BA7517');}
+}
+
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveData,1500);
+}
+
+async function loadAllMonths(){
+  if(!supabase_client)return;
+  try{
+    const {data}=await supabase_client.from('inforezo_data').select('month,payload').order('month',{ascending:false});
+    allMonthsCache=data||[];
+    renderHistorique();
+    populateMonthSel();
+  }catch(e){}
+}
+
+function populateMonthSel(){
+  const sel=document.getElementById('month-sel');
+  const months=allMonthsCache.map(d=>d.month);
+  const cur=getCurrentMonthKey();
+  if(!months.includes(cur))months.unshift(cur);
+  sel.innerHTML=months.map(m=>`<option value="${m}" ${m===currentMonth?'selected':''}>${monthLabel(m)}</option>`).join('');
+}
+
+function changeMonth(){
+  const m=document.getElementById('month-sel').value;
+  loadMonth(m);
+}
+
+async function newMonth(){
+  const cur=getCurrentMonthKey();
+  const exists=allMonthsCache.find(d=>d.month===cur);
+  if(exists){showTab('dashboard');document.getElementById('month-sel').value=cur;changeMonth();return;}
+  currentMonth=cur;sales={};devis=[];nextId=1;
+  await saveData();
+  await loadAllMonths();
+  showTab('dashboard');
+  notify('Nouveau mois créé : '+monthLabel(cur));
+}
+
+// Calculs
+function fmt(n){return Math.round(n).toLocaleString('fr-FR')}
+function marge(s){return Math.round(parseFloat(s.ttc||0)*(parseFloat(s.marge||0)/100))}
+function allSales(){let a=[];Object.keys(sales).forEach(k=>sales[k].forEach(s=>a.push(s)));return a}
+function totalCA(){return allSales().reduce((a,s)=>a+parseFloat(s.ttc||0),0)}
+function totalMarge(){return allSales().reduce((a,s)=>a+marge(s),0)}
+function canalCA(ch){let t=0;Object.keys(sales).forEach(k=>{if(k.endsWith('_'+ch))sales[k].forEach(s=>t+=parseFloat(s.ttc||0))});return t}
+function canalMarge(ch){let t=0;Object.keys(sales).forEach(k=>{if(k.endsWith('_'+ch))sales[k].forEach(s=>t+=marge(s))});return t}
+function weekCA(w){let t=0;DAYS.forEach((_,d)=>CH.forEach(ch=>{const k=w+'_'+d+'_'+ch;if(sales[k])sales[k].forEach(s=>t+=parseFloat(s.ttc||0))}));return t}
+function weekMarge(w){let t=0;DAYS.forEach((_,d)=>CH.forEach(ch=>{const k=w+'_'+d+'_'+ch;if(sales[k])sales[k].forEach(s=>t+=marge(s))}));return t}
+function cellData(w,d,ch){return sales[w+'_'+d+'_'+ch]||[]}
+function cellCA(w,d,ch){return cellData(w,d,ch).reduce((a,s)=>a+parseFloat(s.ttc||0),0)}
+function cellMarge(w,d,ch){return cellData(w,d,ch).reduce((a,s)=>a+marge(s),0)}
+function weekCanalCA(w,ch){return DAYS.reduce((a,_,d)=>a+cellCA(w,d,ch),0)}
+function weekCanalMarge(w,ch){return DAYS.reduce((a,_,d)=>a+cellMarge(w,d,ch),0)}
+
+function renderAll(){
+  renderDashboard();
+  for(let w=0;w<5;w++)renderWeek(w);
+  renderDevis();
+}
+
+function renderDashboard(){
+  const ca=totalCA(),mg=totalMarge(),pct=Math.min(100,Math.round(mg/OBJ*100));
+  const tx=ca>0?Math.round(mg/ca*100):0;
+  const dOpen=devis.filter(d=>d.status==='attente'||d.status==='relancer');
+  const dPot=dOpen.reduce((a,d)=>a+Math.round(d.montant*d.marge/100),0);
+
+  document.getElementById('ca-banner').innerHTML=`
+    <div class="ca-item"><div class="val">€${fmt(ca)}</div><div class="lbl">CA TTC du mois</div><div class="sub" style="color:#888">${monthLabel(currentMonth)}</div></div>
+    <div class="ca-item"><div class="val" style="color:#085041">€${fmt(mg)}</div><div class="lbl">Marge générée</div><div class="sub" style="color:${pct>=100?'#085041':pct>=60?'#BA7517':'#A32D2D'}">${pct}% de l'objectif</div></div>
+    <div class="ca-item"><div class="val" style="color:#378ADD">${tx}%</div><div class="lbl">Taux de marge moyen</div><div class="sub" style="color:#888">objectif : 8 500 €</div></div>`;
+
+  document.getElementById('kpi-grid').innerHTML=[
+    {l:'Reste à faire',v:'€'+fmt(Math.max(0,OBJ-mg)),s:pct>=100?'✓ Objectif atteint !':'sur '+fmt(OBJ)+' €',c:pct>=100?'ok':pct>=60?'warn':'danger'},
+    {l:'Devis potentiel',v:'€'+fmt(dPot),s:dOpen.length+' devis ouverts',c:''},
+    {l:'CA moyen / semaine',v:'€'+fmt(ca/5),s:'Obj. hebdo marge : €'+fmt(OBJ/5),c:''},
+    {l:'Conversion devis',v:devis.length>0?Math.round(devis.filter(d=>d.status==='gagne').length/devis.length*100)+'%':'—',s:devis.filter(d=>d.status==='gagne').length+' gagnés / '+devis.length,c:''},
+  ].map(k=>`<div class="kpi ${k.c}"><div class="kpi-label">${k.l}</div><div class="kpi-value">${k.v}</div><div class="kpi-sub">${k.s}</div></div>`).join('');
+
+  document.getElementById('obj-pct').textContent=pct+'%';
+  const pb=document.getElementById('main-progress');
+  pb.style.width=pct+'%';pb.className='pfill '+(pct>=100?'g':pct>=60?'a':'r');
+
+  document.getElementById('canal-bars').innerHTML=CH.map(ch=>{
+    const m=canalMarge(ch),ca2=canalCA(ch),obj=OBJ_CH[ch],p=Math.min(100,Math.round(m/obj*100));
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:3px">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${CHC[ch]};display:inline-block"></span><strong>${CHL[ch]}</strong></span>
+        <span>CA <strong>€${fmt(ca2)}</strong> · Marge <strong style="color:${CHC[ch]}">€${fmt(m)}</strong> / €${fmt(obj)}</span>
+      </div>
+      <div class="pbar"><div style="height:100%;border-radius:5px;width:${p}%;background:${CHC[ch]}"></div></div>
+    </div>`;
+  }).join('');
+
+  const att=devis.filter(d=>d.status==='attente'),rel=devis.filter(d=>d.status==='relancer');
+  document.getElementById('devis-summary').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div style="padding:10px;background:#FAEEDA;border-radius:8px;text-align:center;border:1px solid #e8c97a">
+        <div style="font-size:22px;font-weight:700;color:#7A4A00">${att.length}</div>
+        <div style="font-size:10px;color:#7A4A00;margin-top:2px">En attente</div>
+        <div style="font-size:12px;font-weight:600;color:#7A4A00;margin-top:3px">€${fmt(att.reduce((a,d)=>a+d.montant,0))}</div>
+      </div>
+      <div style="padding:10px;background:#FCEBEB;border-radius:8px;text-align:center;border:1px solid #f0aaaa">
+        <div style="font-size:22px;font-weight:700;color:#8B1F1F">${rel.length}</div>
+        <div style="font-size:10px;color:#8B1F1F;margin-top:2px">À relancer !</div>
+        <div style="font-size:12px;font-weight:600;color:#8B1F1F;margin-top:3px">€${fmt(rel.reduce((a,d)=>a+d.montant,0))}</div>
+      </div>
+    </div>
+    <button onclick="showTab('devis')" style="font-size:12px;width:100%;padding:6px;cursor:pointer;border:1px solid #ddd;border-radius:7px;background:none;color:#666;font-family:inherit">Gérer les devis →</button>`;
+
+  let wHtml='';
+  for(let w=0;w<5;w++){
+    const wca=weekCA(w),wm=weekMarge(w),wp=Math.min(100,Math.round(wm/(OBJ/5)*100));
+    wHtml+=`<div class="recap-row">
+      <div class="recap-label" onclick="showTab('s${w}')">Semaine ${w+1}</div>
+      <div style="flex:1"><div class="pbar"><div style="height:100%;border-radius:5px;width:${wp}%;background:${wp>=100?'#1D9E75':wp>=60?'#EF9F27':'#E24B4A'}"></div></div></div>
+      <div class="recap-ca">CA €${fmt(wca)}</div>
+      <div class="recap-mg">Marge €${fmt(wm)}</div>
+    </div>`;
+  }
+  document.getElementById('weekly-recap').innerHTML=wHtml;
+}
+
+function renderWeek(w){
+  const el=document.getElementById('tab-s'+w);
+  let html=`<div class="card"><div class="legend">${CH.map(ch=>`<span class="leg-item"><span class="leg-dot" style="background:${CHC[ch]}"></span>${CHL[ch]}</span>`).join('')}</div>
+  <div style="overflow-x:auto"><div class="wg-head"><span></span>${CH.map(ch=>`<span style="background:${CHC[ch]}22;color:${CHC[ch]}">${CHL[ch]}</span>`).join('')}</div>`;
+  DAYS.forEach((day,d)=>{
+    html+=`<div class="day-row"><div class="day-label">${day}</div>`;
+    CH.forEach(ch=>{
+      const entries=cellData(w,d,ch);
+      const cm=cellMarge(w,d,ch),cca=cellCA(w,d,ch);
+      html+=`<div class="cell" style="border-top:2px solid ${CHC[ch]}">`;
+      entries.forEach((s,i)=>{
+        html+=`<div class="s-entry">
+          <select style="font-size:10px;padding:2px 3px;border:1px solid ${CHC[ch]}44;border-radius:4px;background:#fff;color:#1a1a1a;font-family:inherit" onchange="upd(${w},${d},'${ch}',${i},'vtype',this.value)">
+            ${VTYPES[ch].map(t=>`<option value="${t}" ${s.vtype===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+          <input type="number" placeholder="€TTC" value="${s.ttc||''}" min="0" style="width:56px" oninput="upd(${w},${d},'${ch}',${i},'ttc',this.value)">
+          <select oninput="upd(${w},${d},'${ch}',${i},'marge',this.value)">
+            ${[10,15,17,18,20,25,30,50,70,80,90,100].map(v=>`<option value="${v}" ${s.marge==v?'selected':''}>${v}%</option>`).join('')}
+          </select>
+          <button class="del-btn" onclick="delSale(${w},${d},'${ch}',${i})">✕</button>
+        </div>`;
+      });
+      html+=`<button class="add-btn" onclick="addSale(${w},${d},'${ch}')">+ Ajouter</button>`;
+      if(cm>0)html+=`<div class="cell-tot">CA €${fmt(cca)} · Marge €${fmt(cm)}</div>`;
+      html+='</div>';
+    });
+    html+='</div>';
+  });
+  html+=`</div></div>
+  <div class="week-summary">
+    <div class="ws-row">${CH.map(ch=>`<span style="color:${CHC[ch]}">${CHL[ch]} : CA <strong>€${fmt(weekCanalCA(w,ch))}</strong> · Marge <strong>€${fmt(weekCanalMarge(w,ch))}</strong></span>`).join('')}</div>
+    <div class="ws-total">
+      <span>CA semaine : <span style="color:#085041">€${fmt(weekCA(w))}</span></span>
+      <span>Marge semaine : <span style="color:#085041">€${fmt(weekMarge(w))}</span></span>
+      <span style="color:#888;font-size:12px;font-weight:400">Obj. hebdo : €${fmt(OBJ/5)} de marge</span>
+    </div>
+  </div></div>`;
+  el.innerHTML=html;
+}
+
+function addSale(w,d,ch){
+  const k=w+'_'+d+'_'+ch;if(!sales[k])sales[k]=[];
+  sales[k].push({ttc:0,marge:ch==='atelier'?80:17,vtype:VTYPES[ch][0]});
+  renderWeek(w);renderDashboard();scheduleSave();
+}
+function upd(w,d,ch,i,f,v){
+  const k=w+'_'+d+'_'+ch;if(!sales[k]||!sales[k][i])return;
+  sales[k][i][f]=(f==='ttc'||f==='marge')?parseFloat(v)||0:v;
+  renderDashboard();scheduleSave();
+}
+function delSale(w,d,ch,i){
+  const k=w+'_'+d+'_'+ch;if(!sales[k])return;
+  sales[k].splice(i,1);renderWeek(w);renderDashboard();scheduleSave();
+}
+
+function renderDevis(){
+  const tf=document.getElementById('devis-filter').value;
+  const sf=document.getElementById('status-filter').value;
+  const f=devis.filter(d=>(tf==='all'||d.type===tf)&&(sf==='all'||d.status===sf));
+  let html=`<table class="devis-table"><thead><tr>
+    <th style="width:46px">Sem.</th><th style="min-width:100px">Client</th><th style="width:60px">Canal</th>
+    <th>Description</th><th style="width:75px">Montant TTC</th><th style="width:44px">Marge%</th>
+    <th style="width:66px">Marge €</th><th style="width:95px">Statut</th><th style="width:28px"></th>
+  </tr></thead><tbody>`;
+  f.forEach(d=>{
+    const me=Math.round(d.montant*d.marge/100);
+    const sl={attente:'En attente',relancer:'À relancer',gagne:'Gagné',perdu:'Perdu'}[d.status];
+    html+=`<tr>
+      <td><input value="${d.date}" onchange="updD(${d.id},'date',this.value)" style="width:40px"></td>
+      <td><input value="${d.client||''}" onchange="updD(${d.id},'client',this.value)" style="width:100%"></td>
+      <td><select onchange="updD(${d.id},'type',this.value)"><option value="magasin" ${d.type==='magasin'?'selected':''}>Mag.</option><option value="pro" ${d.type==='pro'?'selected':''}>Pro</option></select></td>
+      <td><input value="${d.desc||''}" onchange="updD(${d.id},'desc',this.value)" style="width:100%"></td>
+      <td><input type="number" value="${d.montant}" onchange="updD(${d.id},'montant',this.value)" style="width:70px"></td>
+      <td><input type="number" value="${d.marge}" onchange="updD(${d.id},'marge',this.value)" style="width:38px"></td>
+      <td style="font-weight:700;color:#085041">€${fmt(me)}</td>
+      <td><button class="sp s-${d.status}" onclick="cycleS(${d.id})" title="Cliquer pour changer">${sl}</button></td>
+      <td><button style="background:none;border:none;cursor:pointer;color:#ccc;font-size:14px" onclick="delD(${d.id})">🗑</button></td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('devis-container').innerHTML=html;
+  const tot=f.reduce((a,d)=>a+d.montant,0);
+  const tmg=f.reduce((a,d)=>a+Math.round(d.montant*d.marge/100),0);
+  const nb={attente:0,relancer:0,gagne:0,perdu:0};f.forEach(d=>nb[d.status]++);
+  document.getElementById('devis-total-bar').innerHTML=`
+    <strong>CA devis :</strong> €${fmt(tot)} &nbsp;|&nbsp;
+    <strong style="color:#085041">Marge potentielle : €${fmt(tmg)}</strong> &nbsp;|&nbsp;
+    <span class="sp s-attente" style="cursor:default">${nb.attente} en attente</span>
+    <span class="sp s-relancer" style="cursor:default">${nb.relancer} à relancer</span>
+    <span class="sp s-gagne" style="cursor:default">${nb.gagne} gagnés</span>
+    <span class="sp s-perdu" style="cursor:default">${nb.perdu} perdus</span>`;
+}
+function updD(id,f,v){
+  const d=devis.find(x=>x.id===id);if(!d)return;
+  d[f]=(f==='montant'||f==='marge')?parseFloat(v)||0:v;
+  renderDevis();renderDashboard();scheduleSave();
+}
+function cycleS(id){
+  const d=devis.find(x=>x.id===id);if(!d)return;
+  const c=['attente','relancer','gagne','perdu'];
+  d.status=c[(c.indexOf(d.status)+1)%c.length];
+  renderDevis();renderDashboard();scheduleSave();
+}
+function delD(id){devis=devis.filter(d=>d.id!==id);renderDevis();renderDashboard();scheduleSave();}
+function addDevis(){
+  devis.push({id:nextId++,date:'S1',client:'',type:'pro',montant:0,marge:18,desc:'',status:'attente'});
+  renderDevis();scheduleSave();
+}
+
+function renderHistorique(){
+  const cur=getCurrentMonthKey();
+  let html='';
+  if(allMonthsCache.length===0){
+    html='<p style="color:#888;font-size:13px">Aucun historique disponible. Les mois s\'accumuleront ici au fil du temps.</p>';
+  } else {
+    allMonthsCache.forEach(m=>{
+      const p=m.payload||{};
+      const s=p.sales||{};const dvs=p.devis||[];
+      let mCA=0,mMG=0;
+      Object.values(s).forEach(arr=>arr.forEach(sale=>{mCA+=parseFloat(sale.ttc||0);mMG+=Math.round(parseFloat(sale.ttc||0)*(parseFloat(sale.marge||0)/100));}));
+      const pct=Math.round(mMG/OBJ*100);
+      html+=`<div class="hist-card ${m.month===cur?'current-month':''}" onclick="changeMonthTo('${m.month}')">
+        <div class="hist-month">${monthLabel(m.month)}${m.month===cur?' <span style="font-size:10px;color:#1D9E75;font-weight:400">• en cours</span>':''}</div>
+        <div class="hist-vals">CA : <strong>€${fmt(mCA)}</strong></div>
+        <div class="hist-vals">Marge : <strong>€${fmt(mMG)}</strong> (${pct}% obj.)</div>
+        <div style="margin-top:6px"><div class="pbar" style="height:5px"><div style="height:100%;border-radius:5px;width:${Math.min(100,pct)}%;background:${pct>=100?'#1D9E75':pct>=60?'#EF9F27':'#E24B4A'}"></div></div></div>
+        <div class="hist-vals" style="margin-top:4px">${dvs.length} devis · ${dvs.filter(d=>d.status==='gagne').length} gagnés</div>
+      </div>`;
+    });
+  }
+  document.getElementById('hist-grid').innerHTML=html;
+}
+
+function changeMonthTo(m){
+  document.getElementById('month-sel').value=m;
+  loadMonth(m);
+  showTab('dashboard');
+}
+
+function renderCharges(){
+  const charges=[
+    {l:'Florent — Atelier (35h)',net:1500,coef:1.42,note:'Salarié · charges patronales ~42%'},
+    {l:'Véronique — Magasin (24h)',net:670,coef:1.42,note:'Salariée · charges patronales ~42%'},
+    {l:'Lilou — Apprentie (35h, 1 sem/2)',net:900,coef:1.12,note:'Plein salaire · charges allégées apprenti ~12%'},
+    {l:'Amandine — TNS dirigeante',net:1000,coef:1.45,note:'Cotisations URSSAF TNS ~45%'},
+  ];
+  const totNet=charges.reduce((a,c)=>a+c.net,0);
+  const totBrut=charges.reduce((a,c)=>a+Math.round(c.net*c.coef),0);
+  const autresCh=OBJ-totBrut;
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="card-title" style="margin-bottom:0">Masse salariale mensuelle estimée</div>
+    <button onclick="lockCharges()" style="font-size:11px;padding:4px 10px;border:1px solid #ddd;border-radius:6px;background:none;color:#888;cursor:pointer;font-family:inherit">🔒 Verrouiller</button>
+  </div>
+  <table class="charges-table"><thead><tr>
+    <th>Personne / poste</th><th style="text-align:right">Net mensuel</th><th style="text-align:right">Coût total estimé</th><th>Note</th>
+  </tr></thead><tbody>`;
+  charges.forEach(c=>{
+    const cout=Math.round(c.net*c.coef);
+    html+=`<tr><td>${c.l}</td><td style="text-align:right">€${fmt(c.net)}</td><td style="text-align:right;font-weight:600">€${fmt(cout)}</td><td style="color:#888;font-size:11px">${c.note}</td></tr>`;
+  });
+  html+=`<tr class="tr-tot"><td>Masse salariale totale</td><td style="text-align:right">€${fmt(totNet)}</td><td style="text-align:right">€${fmt(totBrut)}</td><td></td></tr>
+    <tr><td style="color:#666">Marge disponible pour autres charges</td><td></td><td style="text-align:right;color:#BA7517;font-weight:600">€${fmt(autresCh)}</td><td style="color:#888;font-size:11px">Loyer, télécom, assurances…</td></tr>
+    <tr class="tr-obj"><td>✓ Objectif marge (équilibre)</td><td></td><td style="text-align:right">€${fmt(OBJ)}</td><td style="font-size:11px">Seuil d'équilibre</td></tr>
+  </tbody></table>
+  <div style="margin-top:20px"><div class="card-title">Objectifs marge par canal</div>
+  <div class="obj-canal">${CH.map(ch=>`<div class="obj-item" style="border-left-color:${CHC[ch]}"><span style="color:#666">${CHL[ch]}</span><strong>€${fmt(OBJ_CH[ch])}</strong></div>`).join('')}</div>
+  <div style="margin-top:8px;font-size:11px;color:#888">Atelier : prestation (50–100%) + matériel posé (15–25%) · Magasin/Pro/Internet : 15–20%</div></div>`;
+  document.getElementById('charges-content').innerHTML=html;
+}
+
+// Mot de passe Charges
+function askChargesPwd(){
+  if(chargesUnlocked){showTab('charges');renderCharges();return;}
+  document.getElementById('pwd-modal').style.display='flex';
+  document.getElementById('pwd-input').value='';
+  document.getElementById('pwd-error').style.display='none';
+  setTimeout(()=>document.getElementById('pwd-input').focus(),100);
+}
+function checkPwd(){
+  const v=document.getElementById('pwd-input').value;
+  if(v===CHARGES_PWD){chargesUnlocked=true;closePwdModal();showTab('charges');renderCharges();}
+  else{document.getElementById('pwd-error').style.display='block';}
+}
+function closePwdModal(){document.getElementById('pwd-modal').style.display='none';}
+function lockCharges(){chargesUnlocked=false;showTab('dashboard');}
+
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  const tabs=['dashboard','s0','s1','s2','s3','s4','devis','historique','charges'];
+  const idx=tabs.indexOf(name);
+  if(idx>=0)document.querySelectorAll('.tab')[idx].classList.add('active');
+  const el=document.getElementById('tab-'+name);
+  if(el)el.classList.add('active');
+  if(name.startsWith('s')&&!isNaN(name[1]))renderWeek(parseInt(name[1]));
+  if(name==='devis')renderDevis();
+  if(name==='historique')renderHistorique();
+}
+
+function notify(msg){
+  const n=document.getElementById('notif');
+  n.textContent=msg;n.classList.add('show');
+  setTimeout(()=>n.classList.remove('show'),2500);
+}
+
+// Démarrage
+const ok=initSupabase();
+currentMonth=getCurrentMonthKey();
+populateMonthSel();
+loadMonth(currentMonth);
+</script>
+</body>
+</html>
